@@ -10,11 +10,12 @@ use \Rain\Tpl;
  */
 class EBook
 {
-    protected $defaults = array(
+    protected $defaults = [
         'content_dir' => 'OEBPS',
         'book_info'   => 'book.json'
-    );
-    protected $optParams = array(
+    ];
+
+    protected $optParams = [
         'authors',
         'date',
         'description',
@@ -22,22 +23,29 @@ class EBook
         'relation',
         'rights',
         'subject'
-    );
-    protected $params = array();
+    ];
+
+    protected $params = [];
 
     protected $id       = '';
+
     protected $title    = '';
+
     protected $language = '';
-    protected $files    = array();
-    protected $spine    = array();
+
+    protected $files    = [];
+
+    protected $spine    = [];
 
     /**
-     * Initialize a new ebook
+     * Initialize a new e-book
      *
-     * @param  string  $srcDir  The directory that contains the source files
-     * @param  array   $params  Additional settings
+     * EBook constructor.
+     * @param $srcDir        The directory that contains the source files
+     * @param array $params  Additional settings
+     * @throws \Exception
      */
-    public function __construct($srcDir, $params = array())
+    public function __construct($srcDir, $params = [])
     {
         $this->params = array_merge($this->defaults, $params);
 
@@ -86,10 +94,11 @@ class EBook
 
         // process "declared" files
         foreach ($files as $id => $path) {
-            $bookFiles[$id] = array(
+            $bookFiles[$id] = [
                 'path' => $path,
                 'type' => $this->mime("{$this->home}/$path")
-            );
+            ];
+
             $excludes[] = $path;
         }
 
@@ -106,10 +115,10 @@ class EBook
                     (!in_array($path, $excludes) && is_file("{$this->home}/$path") &&
                         is_readable("{$this->home}/$path"))) {
 
-                    $bookFiles[$id] = array(
+                    $bookFiles[$id] = [
                         'path' => $path,
                         'type' => $type
-                    );
+                    ];
                 }
                 continue;
             }
@@ -123,10 +132,10 @@ class EBook
                     $type = $this->mime("{$this->home}/$path");
 
                     if (!in_array($path, $excludes)) {
-                        $bookFiles[$id] = array(
+                        $bookFiles[$id] = [
                             'path' => $path,
                             'type' => $type
-                        );
+                        ];
                     }
                 }
             }
@@ -137,7 +146,7 @@ class EBook
 
     protected function parseSpine($spine)
     {
-        $bookSpine = array('items' => array());
+        $bookSpine = array('items' => []);
 
         if (isset($this->files[$spine['toc']])) {
             $bookSpine['toc'] = $spine['toc'];
@@ -162,7 +171,7 @@ class EBook
         return $bookSpine;
     }
 
-    public function makeEpub($params = array())
+    public function makeEpub($params = [])
     {
         // check and init working directory
         if (!empty($params['working_dir'])) {
@@ -216,10 +225,11 @@ class EBook
 
     protected function initTemplateEngine($params)
     {
-        $defaults = array(
+        $defaults = [
             'tpl_dir'   => "{$this->params['templates_dir']}/",
             'cache_dir' => sys_get_temp_dir() . '/'
-        );
+        ];
+
         $params = array_merge($defaults, $params);
 
         // init template engine
@@ -274,8 +284,7 @@ class EBook
     protected function createNcx($workDir)
     {
         if (isset($this->files['ncx'])) {
-
-            $tpl = $this->initTemplateEngine(array('tpl_ext' => 'ncx'));
+            $tpl = $this->initTemplateEngine(['tpl_ext' => 'ncx']);
             $tpl->assign('BookID', $this->id);
             $tpl->assign('BookTitle', $this->title);
 
@@ -283,6 +292,7 @@ class EBook
             // Each XML-compatible file is loaded and parsed for H1 (chapters) and H2 (subchapters) tags
             $chapters = array();
             libxml_use_internal_errors(true);
+
             foreach ($this->spine['items'] as $item) {
                 $doc = simplexml_load_file("$workDir/{$this->params['content_dir']}/{$this->files[$item]['path']}");
                 if ($doc && isset($doc->body->h1)) {
@@ -318,7 +328,6 @@ class EBook
         }
     }
 
-
     protected function exportBookFiles($workDir, $filters = array())
     {
         foreach ($this->files as $id => $file) {
@@ -334,6 +343,7 @@ class EBook
                 if ($content === false) {
                     throw new \Exception("Unable to load file '$src'");
                 }
+
                 $content = call_user_func($filters[$ext], $content);
 
                 // you can use a custom template named after the file ID or the default page.xhtml template
@@ -391,6 +401,7 @@ class EBook
                     throw new \Exception("Unable to create path '" . dirname($dest) . "'");
                 }
             }
+
             if (file_exists($src)) {
                 copy($src, $dest);
             }
@@ -409,11 +420,13 @@ class EBook
         }
 
         $zip = new \ZipArchive();
+
         if ($zip->open($zipFile, \ZipArchive::CREATE) != true) {
             throw new \Exception("Unable open archive '$zipFile'");
         }
 
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($workDir), \RecursiveIteratorIterator::SELF_FIRST);
+
         foreach ($files as $file) {
             if (in_array(basename($file), $excludes)) {
                 continue;
@@ -427,6 +440,7 @@ class EBook
                 );
             }
         }
+
         $zip->close();
 
         rename($zipFile, $epubFile);
@@ -463,7 +477,7 @@ class EBook
     protected function generateFileId($filename)
     {
         $filename = strtolower($filename);
-        $filename = str_replace(array(' ', '.'), '-', $filename);
+        $filename = str_replace([' ', '.'], '-', $filename);
         $filename = preg_replace('/^(\d+)(.*)/', 'c$1$2', $filename);
 
         return $filename;
