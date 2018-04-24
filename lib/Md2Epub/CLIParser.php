@@ -158,6 +158,267 @@ class CLIParser
 	}
 	
 
+	private function nextLongOption($longOptions, $givenOption)
+    {
+        // If our program does not accept long options
+        // ignore current keyword
+        if (empty($longOptions)) {
+            $this->optind++;
+            return null;
+        }
+
+        // Parse the equal syntax
+        // We allow for:
+        // --key=value
+        // --key value
+        $eqPos = strpos($givenOption, '=');
+
+        // Find option name
+        if ($eqPos === FALSE) {
+            // --key value
+            $key = substr($givenOption, 2);
+        } else {
+            // --key=value
+            $key = substr ($givenOption, 2, $eqPos - 2);
+        }
+
+        // Init return value to NULL (invalid option)
+        $option = null;
+
+        // Search if the option is in the list of valid long options
+        foreach ($longOptions as $opt) {
+            // Transform in array, this allow string-only declarations in options array
+            if (!is_array($opt)) {
+                $opt = array($opt);
+            }
+
+            // Match not found, go to next
+            if ((string)$opt[0] !== $key) {
+                continue;
+            } else {
+                // Match found, set return option name
+                $option = $key;
+
+                // If 1-char equiv is present, it overrides long name
+                if (isset($opt[2]) && strlen((string)$opt[2]) == 1) {
+                    $option = $opt[2];
+                }
+
+                // If option should have a parameter
+                if (isset($opt[1]) && TRUE === $opt[1]) {
+                    if ($eqPos !== FALSE) {
+                        // Parsing equal format (--key=value): parameter value is the string after '='
+                        $this->optarg = substr($givenOption, $eqPos + 1);
+
+                        // Index is updated by 1 step only
+                        $this->optind = $this->optind + 1;
+                    } else {
+                        // Parameter should be in the command line in the next position
+
+                        // Test if arg is a real arg or another option (contains - or --)
+                        if ($this->optind < $this->argc -1) {
+                            $optarg = $this->argv[$this->optind + 1];
+                            if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
+                                // Option value is ok, set it and update index by 2 steps
+                                $this->optarg = $optarg;
+                                $this->optind = $this->optind + 2;
+                            } else {
+                                // Option value missing, set it to FALSE and update index by 1 step only
+                                $this->optarg = FALSE;
+                                $this->optind = $this->optind + 1;
+                            }
+                        } else {
+                            // Option value missing, set it to FALSE and update index by 1 step only
+                            $this->optarg = FALSE;
+                            $this->optind = $this->optind + 1;
+                        }
+                    }
+                } else {
+                    $this->optarg = TRUE;
+                    $this->optind = $this->optind + 1;
+                }
+            }
+        }
+
+        // At the end of the loop $option can be NULL or a string value
+        //$this->optind = $this->optind + 1;
+        return $option;
+    }
+
+    private function nextShortOption($shortOptions, $givenOption)
+    {
+        // If our program does not accept short options
+        // ignore current keyword
+        if (empty($shortOptions)) {
+            $this->optind++;
+
+            return null;
+        }
+
+        // We do not accept single letter options with '=' (format -o=value)
+        if (is_numeric(strpos($givenOption, '='))) {
+            $this->optind++;
+
+            return null;
+        } else {
+            // We must accept grouped option (eg. -cvd)
+            $key = substr($givenOption, 1);
+
+            if (strlen($key) > 1) {
+                // We are parsing an option group
+                // We parse every single character, remove it from the current argument
+                // and wd DO NOT update index counter, unless we are parsing the last option
+                $chars = str_split($key);
+                foreach ($chars as $char) {
+                    // Test if is a valid option
+                    $cpos = strpos($shortOptions, $char);
+                    if ($cpos !== FALSE) {
+                        // Is Valid option: set return value
+                        $option = $char;
+                        // Check if option accept a parameter
+                        if (isset($shortOptions[$cpos+1]) && $shortOptions[$cpos+1] === ':') {
+                            // Ok, current option accept a parameter, start parsing
+                            // Check n.1: if an option accepts a parameter, to be valid must be the last
+                            // in an option-group, for example:
+                            // YES: tar -cvzf filename.tar.gz
+                            // NO: tar -cvfz filename.tar.gz
+                            if (strpos($key, $char) < (strlen($key)-1)) {
+                                // Current option is not the last, so the parameter is invalid
+                                // return option with FALSE as argument
+                                $this->optarg = FALSE;
+
+                                // Remove current option from $this->argv[$this->optind]
+                                // so it's not counted on next loop
+                                $this->argv[$this->optind] = str_replace($char, '', $this->argv[$this->optind]);
+
+                                return $option;
+                            }
+
+                            // Our option is the last, so check for a valid parameter
+                            if ($this->optind < $this->argc -1) {
+                                // Get next argument from our copy of $argv
+                                $optarg = (string) $this->argv[$this->optind + 1];
+
+                                // If the argument is not an option (should not begin with - or --)
+                                if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
+                                    // Option value is ok, set it and update index by 2 steps
+                                    $this->optarg = $optarg;
+                                    $this->optind = $this->optind + 2;
+
+                                    return $option;
+                                } else {
+                                    // Option value missing, set it to FALSE and update index by 1 step only
+                                    $this->optarg = FALSE;
+                                    $this->optind = $this->optind + 1;
+
+                                    return $option;
+                                }
+                            } else {
+                                // Option value missing, set it to FALSE and update index by 1 step only
+                                $this->optarg = FALSE;
+                                $this->optind = $this->optind + 1;
+
+                                return $option;
+                            }
+                        } else {
+                            // Current option do not accept parameters
+                            $this->optarg = TRUE;
+
+                            // Remove current option from $this->argv[$this->optind]
+                            // so it's not counted on next loop
+                            $this->argv[$this->optind] = str_replace($char, '', $this->argv[$this->optind]);
+
+                            // Return the option value
+                            // Option index is updated (by 1) only if this is the last option
+                            if (strpos($key, $char) == (strlen($key)-1)) {
+                                $this->optind = $this->optind + 1;
+                            }
+
+                            return $option;
+                        }
+                    }
+                }
+
+                // If we reach here the chance is we didn't find any allowed option
+                // so we return null
+                if (strpos($key, $char) == (strlen($key)-1)) {
+                    $this->optind = $this->optind + 1;
+                }
+
+                return null;
+                // Deal with a single-char option, no option group
+            } else if (strlen($key) == 1) {
+                // Check if option is allowed
+                $cpos = strpos($shortOptions, $key);
+                if ($cpos !== FALSE) {
+                    // Ok, our option is supported
+                    $option = $key;
+                    // Check if option allows parameters
+                    if (isset($shortOptions[$cpos+1]) && $shortOptions[$cpos+1] === ':') {
+                        // Ok, parse parameter
+                        if ($this->optind < $this->argc -1) {
+                            // Get next arg from our copy of $argv
+                            $optarg = $this->argv[$this->optind + 1];
+
+                            // If arg is not an option (should not begin with - or --)
+                            if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
+                                // Option value is ok, set it and update index by 2 steps
+                                $this->optarg = $optarg;
+                                $this->optind = $this->optind + 2;
+                            } else {
+                                // Option value missing, set it to FALSE and update index by 1 step only
+                                $this->optarg = FALSE;
+                                $this->optind = $this->optind + 1;
+                            }
+                        } else {
+                            // Option value missing, set it to FALSE and update index by 1 step only
+                            $this->optarg = FALSE;
+                            $this->optind = $this->optind + 1;
+                        }
+                    } else {
+                        // No parameter
+                        $this->optarg = TRUE;
+                        $this->optind = $this->optind + 1;
+
+                    }
+
+                    // In any case we now have a supported option
+                    return $option;
+                } else {
+                    // Invalid option, go to next
+                    $this->optind = $this->optind + 1;
+
+                    return null;
+                }
+            } else {
+                // Invalid option, go to next
+                $this->optind = $this->optind + 1;
+
+                return null;
+            }
+        }
+    }
+
+    private function isLongOption($option)
+    {
+        return (substr($option, 0, 2) === '--');
+    }
+
+    private function isShortOption($option)
+    {
+        return (!$this->isLongOption($option)) && (substr($option, 0, 1) === '-');
+    }
+
+    private function validOption($optind, $argc)
+    {
+        return $optind < $argc;
+    }
+
+    private function fetchOption($argv, $optind)
+    {
+        return $argv[$optind];
+    }
+
 	/**
 	 * Searches for a valid next option
 	 * 
@@ -174,253 +435,17 @@ class CLIParser
 		$longOptions  = $this->longOptions;
 
 		// Check for index validity
-		if ($this->optind < $this->argc) {
+		if ($this->validOption($this->optind, $this->argc)) {
 			// Get a copy of the current option to examine
-			$arg = $this->argv[$this->optind];
+            $currentOption = $this->fetchOption($this->argv, $this->optind);
 			
 			// The current option is a long option
-			if (substr($arg, 0, 2) === '--') {
-				// If our program does not accept long options
-				// ignore current keyword
-				if (empty($longOptions)) {
-					$this->optind++;
-					return null;
-				}
-				
-				// Parse the equal syntax
-				// We allow for:
-				// --key=value
-				// --key value
-				$eqPos = strpos($arg, '=');
-				
-				// Find option name
-				if ($eqPos === FALSE) {
-					// --key value
-	                $key = substr($arg, 2);
-	            } else {
-					// --key=value
-	                $key = substr ($arg, 2, $eqPos - 2);
-	            }
-	
-				// Init return value to NULL (invalid option)
-				$option = null;
-				
-				// Search if the option is in the list of valid long options
-				foreach ($longOptions as $opt) {
-					// Transform in array, this allow string-only declarations in options array
-					if (!is_array($opt)) {
-                        $opt = array($opt);
-                    }
-					
-					// Match not found, go to next
-					if ((string)$opt[0] !== $key) {
-						continue;
-					} else {
-						// Match found, set return option name
-						$option = $key;
-						
-						// If 1-char equiv is present, it overrides long name
-						if (isset($opt[2]) && strlen((string)$opt[2]) == 1) {
-							$option = $opt[2];
-						}
-
-						// If option should have a parameter
-						if (isset($opt[1]) && TRUE === $opt[1]) {
-							if ($eqPos !== FALSE) {
-								// Parsing equal format (--key=value): parameter value is the string after '='
-								$this->optarg = substr($arg, $eqPos + 1);
-								
-								// Index is updated by 1 step only
-								$this->optind = $this->optind + 1;
-							} else {
-								// Parameter should be in the command line in the next position
-								
-								// Test if arg is a real arg or another option (contains - or --)
-								if ($this->optind < $this->argc -1) {
-									$optarg = $this->argv[$this->optind + 1];
-									if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
-										// Option value is ok, set it and update index by 2 steps
-										$this->optarg = $optarg;
-										$this->optind = $this->optind + 2;
-									} else {
-										// Option value missing, set it to FALSE and update index by 1 step only
-										$this->optarg = FALSE;
-										$this->optind = $this->optind + 1;
-									}
-								} else {
-									// Option value missing, set it to FALSE and update index by 1 step only
-									$this->optarg = FALSE;
-									$this->optind = $this->optind + 1;
-								}
-							}
-						} else {
-							$this->optarg = TRUE;
-							$this->optind = $this->optind + 1;
-						}
-					}
-				}
-				
-				// At the end of the loop $option can be NULL or a string value
-				//$this->optind = $this->optind + 1;
-				return $option;
+			if ($this->isLongOption($currentOption)) {
+				return $this->nextLongOption($longOptions, $currentOption);
 			// The current option is a short option
-			} else if (substr($arg, 0, 1) === '-') {
-				// If our program does not accept short options
-				// ignore current keyword
-				if (empty($shortOptions)) {
-					$this->optind++;
-
-					return null;
-				}
-
-				// We do not accept single letter options with '=' (format -o=value)
-				if (is_numeric(strpos($arg, '='))) {
-					$this->optind++;
-
-					return null;
-	            } else {
-					// We must accept grouped option (eg. -cvd)
-					$key = substr($arg, 1);
-					
-					if (strlen($key) > 1) {
-						// We are parsing an option group
-						// We parse every single character, remove it from the current argument
-						// and wd DO NOT update index counter, unless we are parsing the last option
-		                $chars = str_split($key);
-		                foreach ($chars as $char) {
-							// Test if is a valid option
-							$cpos = strpos($shortOptions, $char);
-							if ($cpos !== FALSE) {
-								// Is Valid option: set return value
-								$option = $char;
-								// Check if option accept a parameter
-								if (isset($shortOptions[$cpos+1]) && $shortOptions[$cpos+1] === ':') {
-									// Ok, current option accept a parameter, start parsing
-									// Check n.1: if an option accepts a parameter, to be valid must be the last
-									// in an option-group, for example:
-									// YES: tar -cvzf filename.tar.gz
-									// NO: tar -cvfz filename.tar.gz
-									if (strpos($key, $char) < (strlen($key)-1)) {
-										// Current option is not the last, so the parameter is invalid
-										// return option with FALSE as argument
-										$this->optarg = FALSE;
-
-										// Remove current option from $this->argv[$this->optind]
-										// so it's not counted on next loop
-										$this->argv[$this->optind] = str_replace($char, '', $this->argv[$this->optind]);
-
-										return $option;
-									}
-									
-									// Our option is the last, so check for a valid parameter
-									if ($this->optind < $this->argc -1) {
-										// Get next argument from our copy of $argv
-										$optarg = (string) $this->argv[$this->optind + 1];
-
-										// If the argument is not an option (should not begin with - or --)
-										if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
-											// Option value is ok, set it and update index by 2 steps
-											$this->optarg = $optarg;
-											$this->optind = $this->optind + 2;
-
-											return $option;
-										} else {
-											// Option value missing, set it to FALSE and update index by 1 step only
-											$this->optarg = FALSE;
-											$this->optind = $this->optind + 1;
-
-											return $option;
-										}
-									} else {
-										// Option value missing, set it to FALSE and update index by 1 step only
-										$this->optarg = FALSE;
-										$this->optind = $this->optind + 1;
-
-										return $option;
-									}
-								} else {
-									// Current option do not accept parameters
-									$this->optarg = TRUE;
-									
-									// Remove current option from $this->argv[$this->optind]
-									// so it's not counted on next loop
-									$this->argv[$this->optind] = str_replace($char, '', $this->argv[$this->optind]);
-									
-									// Return the option value
-									// Option index is updated (by 1) only if this is the last option
-									if (strpos($key, $char) == (strlen($key)-1)) {
-										$this->optind = $this->optind + 1;
-									}
-
-									return $option;
-								}
-							}
-		                }
-		
-						// If we reach here the chance is we didn't find any allowed option
-						// so we return null
-						if (strpos($key, $char) == (strlen($key)-1)) {
-							$this->optind = $this->optind + 1;
-						}
-
-						return null;
-					// Deal with a single-char option, no option group
-					} else if (strlen($key) == 1) {
-						// Check if option is allowed
-						$cpos = strpos($shortOptions, $key);
-						if ($cpos !== FALSE) {
-							// Ok, our option is supported
-							$option = $key;
-							// Check if option allows parameters
-							if (isset($shortOptions[$cpos+1]) && $shortOptions[$cpos+1] === ':') {
-								// Ok, parse parameter
-								if ($this->optind < $this->argc -1) {
-									// Get next arg from our copy of $argv
-									$optarg = $this->argv[$this->optind + 1];
-
-									// If arg is not an option (should not begin with - or --)
-									if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
-										// Option value is ok, set it and update index by 2 steps
-										$this->optarg = $optarg;
-										$this->optind = $this->optind + 2;
-									} else {
-										// Option value missing, set it to FALSE and update index by 1 step only
-										$this->optarg = FALSE;
-										$this->optind = $this->optind + 1;
-									}
-								} else {
-									// Option value missing, set it to FALSE and update index by 1 step only
-									$this->optarg = FALSE;
-									$this->optind = $this->optind + 1;
-								}
-							} else {
-								// No parameter
-								$this->optarg = TRUE;
-								$this->optind = $this->optind + 1;
-
-							}
-							
-							// In any case we now have a supported option
-							return $option;
-						} else {
-							// Invalid option, go to next
-							$this->optind = $this->optind + 1;
-
-							return null;
-						}
-					} else {
-						// Invalid option, go to next
-						$this->optind = $this->optind + 1;
-
-						return null;
-					}
-	            }
+			} else if ($this->isShortOption($currentOption)) {
+				return $this->nextShortOption($shortOptions, $currentOption);
 			}
-			
-			// If is not - or -- is an argument, so we stop parsing
-			// at the first non-option string
-			// and $this->optind points to the first argument
-			
 		}
 		
 		return -1;
