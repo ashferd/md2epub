@@ -80,6 +80,10 @@ class EBook
         $this->spine = $this->parseSpine($bookInfo['spine']);
     }
 
+    /**
+     * @param $files
+     * @return array
+     */
     protected function parseFiles($files)
     {
         $bookFiles = array();
@@ -144,6 +148,10 @@ class EBook
         return $bookFiles;
     }
 
+    /**
+     * @param $spine
+     * @return array
+     */
     protected function parseSpine($spine)
     {
         $bookSpine = array('items' => []);
@@ -171,6 +179,10 @@ class EBook
         return $bookSpine;
     }
 
+    /**
+     * @param array $params
+     * @throws \Exception
+     */
     public function makeEpub($params = [])
     {
         // check and init working directory
@@ -223,6 +235,10 @@ class EBook
         $this->createArchive($workDir, $epubFile);
     }
 
+    /**
+     * @param $params
+     * @return Tpl
+     */
     protected function initTemplateEngine($params)
     {
         $defaults = [
@@ -238,6 +254,10 @@ class EBook
         return $tpl;
     }
 
+    /**
+     * @param $workDir
+     * @throws \Exception
+     */
     protected function createMetaInf($workDir)
     {
         // create destination directory
@@ -256,6 +276,10 @@ class EBook
         }
     }
 
+    /**
+     * @param $workDir
+     * @throws \Exception
+     */
     protected function createOpf($workDir)
     {
         // compile file
@@ -281,6 +305,10 @@ class EBook
         }
     }
 
+    /**
+     * @param $workDir
+     * @throws \Exception
+     */
     protected function createNcx($workDir)
     {
         if (isset($this->files['ncx'])) {
@@ -328,6 +356,11 @@ class EBook
         }
     }
 
+    /**
+     * @param $workDir
+     * @param array $filters
+     * @throws \Exception
+     */
     protected function exportBookFiles($workDir, $filters = array())
     {
         foreach ($this->files as $id => $file) {
@@ -408,6 +441,11 @@ class EBook
         }
     }
 
+    /**
+     * @param $workDir
+     * @param $epubFile
+     * @throws \Exception
+     */
     protected function createArchive($workDir, $epubFile)
     {
         $excludes = array('.DS_Store', 'mimetype');
@@ -446,6 +484,10 @@ class EBook
         rename($zipFile, $epubFile);
     }
 
+    /**
+     * @param $name
+     * @return mixed|null
+     */
     public function getParam($name)
     {
         if (isset($this->params[$name])) {
@@ -454,26 +496,42 @@ class EBook
         return null;
     }
 
-    public function id()
+    /**
+     * @return string
+     */
+    public function id(): string
     {
         return $this->id;
     }
 
-    public function title()
+    /**
+     * @return string
+     */
+    public function title(): string
     {
         return $this->title;
     }
 
-    public function language()
+    /**
+     * @return string
+     */
+    public function language(): string
     {
         return $this->language;
     }
 
-    public function files()
+    /**
+     * @return array
+     */
+    public function files(): array
     {
         return $this->files;
     }
 
+    /**
+     * @param $filename
+     * @return mixed|null|string|string[]
+     */
     protected function generateFileId($filename)
     {
         $filename = strtolower($filename);
@@ -483,18 +541,22 @@ class EBook
         return $filename;
     }
 
+    /**
+     * @param $file
+     * @return mixed|string
+     */
     protected function mime($file)
     {
         $mime = '';
         if (file_exists($file)) {
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfo, $file);
-            finfo_close($finfo);
+            $fileInfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime = finfo_file($fileInfo, $file);
+            finfo_close($fileInfo);
         }
 
         // fix mime types
-        $fileinfo = pathinfo($file);
-        switch ($fileinfo['extension']) {
+        $fileInfo = pathinfo($file);
+        switch ($fileInfo['extension']) {
             case 'xhtml':
                 $mime = 'application/xhtml+xml';
                 break;
