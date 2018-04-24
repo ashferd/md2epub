@@ -158,31 +158,68 @@ class CLIParser
 	}
 	
 
-	private function nextLongOption($longOptions, $givenOption)
+	private function getLongOptionKey($option, $positionOfEquals)
     {
-        // If our program does not accept long options
-        // ignore current keyword
-        if (empty($longOptions)) {
-            $this->optind++;
-            return null;
-        }
-
-        // Parse the equal syntax
-        // We allow for:
-        // --key=value
-        // --key value
-        $eqPos = strpos($givenOption, '=');
+        $longOptionKey = '';
 
         // Find option name
-        if ($eqPos === FALSE) {
+        if ($positionOfEquals === FALSE) {
             // --key value
-            $key = substr($givenOption, 2);
+            $longOptionKey = substr($option, 2);
         } else {
             // --key=value
-            $key = substr ($givenOption, 2, $eqPos - 2);
+            $longOptionKey = substr ($option, 2, $positionOfEquals - 2);
         }
 
-        // Init return value to NULL (invalid option)
+        return $longOptionKey;
+    }
+
+
+    private function getLongOptionValue($givenOption, $positionOfEquals)
+    {
+        // Parsing equal format (--key=value): parameter value is the string after '='
+        return substr($givenOption, $positionOfEquals + 1);
+    }
+
+    public function updateOptionArgAndIndex($opt, $positionOfEquals, $givenOption)
+    {
+        // If option should have a parameter
+        if (isset($opt[1]) && TRUE === $opt[1]) {
+            if ($positionOfEquals !== FALSE) {
+                $this->optarg = $this->getLongOptionValue($givenOption, $positionOfEquals);
+
+                // Index is updated by 1 step only
+                $this->optind = $this->optind + 1;
+            } else {
+                // Parameter should be in the command line in the next position
+
+                // Test if arg is a real arg or another option (contains - or --)
+                if ($this->optind < $this->argc -1) {
+                    $optarg = $this->fetchOption($this->argv, $this->optind + 1);
+
+                    if (!$this->isLongOption($optarg) && !$this->isShortOption($optarg)) {
+                        // Option value is ok, set it and update index by 2 steps
+                        $this->optarg = $optarg;
+                        $this->optind = $this->optind + 2;
+                    } else {
+                        // Option value missing, set it to FALSE and update index by 1 step only
+                        $this->optarg = FALSE;
+                        $this->optind = $this->optind + 1;
+                    }
+                } else {
+                    // Option value missing, set it to FALSE and update index by 1 step only
+                    $this->optarg = FALSE;
+                    $this->optind = $this->optind + 1;
+                }
+            }
+        } else {
+            $this->optarg = TRUE;
+            $this->optind = $this->optind + 1;
+        }
+    }
+
+    private function getLongOption($longOptions, $longOptionKey, $positionOfEquals, $givenOption)
+    {
         $option = null;
 
         // Search if the option is in the list of valid long options
@@ -193,56 +230,42 @@ class CLIParser
             }
 
             // Match not found, go to next
-            if ((string)$opt[0] !== $key) {
+            if ((string)$opt[0] !== $longOptionKey) {
                 continue;
             } else {
                 // Match found, set return option name
-                $option = $key;
+                $option = $longOptionKey;
 
                 // If 1-char equiv is present, it overrides long name
                 if (isset($opt[2]) && strlen((string)$opt[2]) == 1) {
                     $option = $opt[2];
                 }
 
-                // If option should have a parameter
-                if (isset($opt[1]) && TRUE === $opt[1]) {
-                    if ($eqPos !== FALSE) {
-                        // Parsing equal format (--key=value): parameter value is the string after '='
-                        $this->optarg = substr($givenOption, $eqPos + 1);
-
-                        // Index is updated by 1 step only
-                        $this->optind = $this->optind + 1;
-                    } else {
-                        // Parameter should be in the command line in the next position
-
-                        // Test if arg is a real arg or another option (contains - or --)
-                        if ($this->optind < $this->argc -1) {
-                            $optarg = $this->argv[$this->optind + 1];
-                            if (!(substr($optarg, 0, 2) === '--') && !(substr($optarg, 0, 1) === '-')) {
-                                // Option value is ok, set it and update index by 2 steps
-                                $this->optarg = $optarg;
-                                $this->optind = $this->optind + 2;
-                            } else {
-                                // Option value missing, set it to FALSE and update index by 1 step only
-                                $this->optarg = FALSE;
-                                $this->optind = $this->optind + 1;
-                            }
-                        } else {
-                            // Option value missing, set it to FALSE and update index by 1 step only
-                            $this->optarg = FALSE;
-                            $this->optind = $this->optind + 1;
-                        }
-                    }
-                } else {
-                    $this->optarg = TRUE;
-                    $this->optind = $this->optind + 1;
-                }
+                $this->updateOptionArgAndIndex($opt, $positionOfEquals, $givenOption);
             }
         }
 
-        // At the end of the loop $option can be NULL or a string value
-        //$this->optind = $this->optind + 1;
         return $option;
+    }
+
+	private function nextLongOption($longOptions, $givenOption)
+    {
+        // If our program does not accept long options
+        // ignore current keyword
+        if (empty($longOptions)) {
+            $this->optind++;
+
+            return null;
+        }
+
+        // Parse the equal syntax
+        // We allow for:
+        // --key=value
+        // --key value
+        $positionOfEquals = strpos($givenOption, '=');
+        $longOptionKey = $this->getLongOptionKey($givenOption, $positionOfEquals);
+
+        return $this->getLongOption($longOptions, $longOptionKey, $positionOfEquals, $givenOption);
     }
 
     private function nextShortOption($shortOptions, $givenOption)
