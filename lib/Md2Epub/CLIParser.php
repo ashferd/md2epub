@@ -286,16 +286,13 @@ class CLIParser
         return $longOptionKey;
     }
 
-
-
-
     private function getLongOptionValue($givenOption, $positionOfEquals)
     {
         // Parsing equal format (--key=value): parameter value is the string after '='
         return substr($givenOption, $positionOfEquals + 1);
     }
 
-    public function updateOptionArgAndIndex($opt, $positionOfEquals, $givenOption)
+    public function updateLongOptionArgAndIndex($opt, $positionOfEquals, $givenOption)
     {
         // If option should have a parameter
         if (isset($opt[1]) && true === $opt[1]) {
@@ -355,7 +352,7 @@ class CLIParser
                     $option = $opt[2];
                 }
 
-                $this->updateOptionArgAndIndex($opt, $positionOfEquals, $givenOption);
+                $this->updateLongOptionArgAndIndex($opt, $positionOfEquals, $givenOption);
             }
         }
 
