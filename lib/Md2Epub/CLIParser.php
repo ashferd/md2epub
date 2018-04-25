@@ -156,9 +156,121 @@ class CLIParser
 		
 		$this->setEnv($shortOptions, $longOptions);
 	}
-	
 
-	private function getLongOptionKey($option, $positionOfEquals)
+    /**
+     * Returns the program name
+     *
+     * @return string
+     */
+    public function program()
+    {
+        return $this->program;
+    }
+
+    /**
+     * Return all the options in an associative array where the key is the option's name
+     *
+     * For options that act like switches (eg. -v) the array value is true
+     * ($options['v'] => true)
+     *
+     * For options that require a parameter (eg. -o filename) the array value is the
+     * parameter value ($options['o'] => "filename")
+     *
+     * @param  int     $start         Initial index to start with, in order to allow the syntax
+     *                                'program command [options] [arguments]'
+     *
+     * @return array
+     */
+    public function options( $start = 1)
+    {
+        // Init index
+        $this->optind = (0 == ($start)) ? 1 : intval($start);
+
+        // Loop the arguments until there is no option (-1)
+        // At the end of the loop $this->optind points to the first non-option
+        // parameter
+        do {
+            // Query next option
+            $nextOption = $this->nextOption();
+
+            // If the option is an option (!== -1) or is valid (not null)
+            // set it's value and put it in the options array to return
+            if ($nextOption !== null && $nextOption !== -1) {
+                if ($this->optarg !== null) {
+                    $this->options[$nextOption] = $this->optarg;
+                } else {
+                    $this->options[$nextOption] = true;
+                }
+            }
+
+        } while ($nextOption !== -1);
+
+        return $this->options;
+    }
+
+    /**
+     * Returns program's arguments
+     *
+     * An argument is everything that is not an option, for example a file path
+     *
+     * @return array
+     */
+    public function arguments()
+    {
+        if ($this->optind < $this->argc) {
+            for ($i = $this->optind; $i < $this->argc; $i++) {
+                $this->arguments[] = $this->argv[$i];
+            }
+        }
+
+        return $this->arguments;
+    }
+
+    private function validOption($optind, $argc)
+    {
+        return $optind < $argc;
+    }
+
+    private function fetchOption($argv, $optind)
+    {
+        return $argv[$optind];
+    }
+
+    /**
+     * Searches for a valid next option
+     *
+     * If the option is not valid returns NULL, if there is no option returns -1
+     *
+     * @return mixed | NULL
+     */
+    private function nextOption()
+    {
+        // Reset option argument
+        $this->optarg = null;
+
+        $shortOptions = $this->shortOptions;
+        $longOptions  = $this->longOptions;
+
+        // Check for index validity
+        if ($this->validOption($this->optind, $this->argc)) {
+            // Get a copy of the current option to examine
+            $currentOption = $this->fetchOption($this->argv, $this->optind);
+
+            // The current option is a long option
+            if ($this->isLongOption($currentOption)) {
+                return $this->nextLongOption($longOptions, $currentOption);
+                // The current option is a short option
+            } else if ($this->isShortOption($currentOption)) {
+                return $this->nextShortOption($shortOptions, $currentOption);
+            }
+        }
+
+        return -1;
+    }
+
+	/********************************* Long option methods *************************************/
+
+    private function getLongOptionKey($option, $positionOfEquals)
     {
         $longOptionKey = '';
 
@@ -173,6 +285,8 @@ class CLIParser
 
         return $longOptionKey;
     }
+
+
 
 
     private function getLongOptionValue($givenOption, $positionOfEquals)
@@ -248,7 +362,7 @@ class CLIParser
         return $option;
     }
 
-	private function nextLongOption($longOptions, $givenOption)
+    private function nextLongOption($longOptions, $givenOption)
     {
         // If our program does not accept long options
         // ignore current keyword
@@ -267,6 +381,13 @@ class CLIParser
 
         return $this->getLongOption($longOptions, $longOptionKey, $positionOfEquals, $givenOption);
     }
+
+    private function isLongOption($option)
+    {
+        return (substr($option, 0, 2) === '--');
+    }
+
+	/*********************************Short option methods *************************************/
 
     private function processGroupedShortOptions($shortOptions, $key)
     {
@@ -431,126 +552,8 @@ class CLIParser
         }
     }
 
-    private function isLongOption($option)
-    {
-        return (substr($option, 0, 2) === '--');
-    }
-
     private function isShortOption($option)
     {
         return (!$this->isLongOption($option)) && (substr($option, 0, 1) === '-');
     }
-
-    private function validOption($optind, $argc)
-    {
-        return $optind < $argc;
-    }
-
-    private function fetchOption($argv, $optind)
-    {
-        return $argv[$optind];
-    }
-
-	/**
-	 * Searches for a valid next option
-	 * 
-	 * If the option is not valid returns NULL, if there is no option returns -1
-	 * 
-	 * @return mixed | NULL
-	 */
-	private function nextOption()
-    {
-		// Reset option argument
-		$this->optarg = null;
-		
-		$shortOptions = $this->shortOptions;
-		$longOptions  = $this->longOptions;
-
-		// Check for index validity
-		if ($this->validOption($this->optind, $this->argc)) {
-			// Get a copy of the current option to examine
-            $currentOption = $this->fetchOption($this->argv, $this->optind);
-			
-			// The current option is a long option
-			if ($this->isLongOption($currentOption)) {
-				return $this->nextLongOption($longOptions, $currentOption);
-			// The current option is a short option
-			} else if ($this->isShortOption($currentOption)) {
-				return $this->nextShortOption($shortOptions, $currentOption);
-			}
-		}
-		
-		return -1;
-	}
-
-	/**
-	 * Return all the options in an associative array where the key is the option's name
-	 * 
-	 * For options that act like switches (eg. -v) the array value is true
-	 * ($options['v'] => true)
-	 * 
-	 * For options that require a parameter (eg. -o filename) the array value is the 
-	 * parameter value ($options['o'] => "filename")
-	 * 
-	 * @param  int     $start         Initial index to start with, in order to allow the syntax 
-	 *                                'program command [options] [arguments]'
-	 * 
-	 * @return array
-	 */
-	public function options( $start = 1)
-    {
-		// Init index
-		$this->optind = (0 == ($start)) ? 1 : intval($start);
-		
-		// Loop the arguments until there is no option (-1)
-		// At the end of the loop $this->optind points to the first non-option
-		// parameter
-		do {
-			// Query next option
-			$nextOption = $this->nextOption();
-			
-			// If the option is an option (!== -1) or is valid (not null)
-			// set it's value and put it in the options array to return
-			if ($nextOption !== null && $nextOption !== -1) {
-				if ($this->optarg !== null) {
-					$this->options[$nextOption] = $this->optarg;
-				} else {
-					$this->options[$nextOption] = true;
-				}
-			}
-			
-		} while ($nextOption !== -1);
-		
-		return $this->options;
-	}
-
-
-	/**
-	 * Returns program's arguments
-	 * 
-	 * An argument is everything that is not an option, for example a file path
-	 * 
-	 * @return array
-	 */
-	public function arguments()
-    {
-		if ($this->optind < $this->argc) {
-			for ($i = $this->optind; $i < $this->argc; $i++) {
-				$this->arguments[] = $this->argv[$i];
-			}
-		}
-		
-		return $this->arguments;
-	}
-	
-	
-	/**
-	 * Returns the program name
-	 * 
-	 * @return string
-	 */
-	public function program()
-    {
-		return $this->program;
-	}
 }
